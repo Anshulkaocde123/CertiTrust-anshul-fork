@@ -1,0 +1,18 @@
+-- Supabase SQL: documents & attestations
+
+create table if not exists documents (
+  id uuid default uuid_generate_v4() primary key,
+  owner text,
+  file_name text,
+  file_hash text,
+  created_at timestamptz default now()
+);
+
+create table if not exists attestations (
+  id uuid default uuid_generate_v4() primary key,
+  document_id uuid references documents(id) on delete cascade,
+  tx_hash text,
+  block_number integer,
+  contract_address text,
+  created_at timestamptz default now()
+);

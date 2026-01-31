@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CertiTrust Demo</title>
+  <style>
+    body { font-family: system-ui, Arial; padding: 1rem; }
+    section { margin-bottom: 1.5rem; }
+    pre { background:#f6f8fa; padding:0.5rem; border-radius:6px; max-height:300px; overflow:auto }
+  </style>
+</head>
+<body>
+  <h1>CertiTrust Demo</h1>
+
+  <section>
+    <h2>Issue Credential</h2>
+    <input type="file" id="file" />
+    <input type="text" id="subjectId" placeholder="did:example:alice" />
+    <button id="issueBtn">Issue</button>
+    <pre id="issueResult">No result yet</pre>
+  </section>
+
+  <section>
+    <h2>Verify Credential (JWT)</h2>
+    <textarea id="jwt" rows="4" cols="60" placeholder="paste JWT here"></textarea><br/>
+    <button id="verifyBtn">Verify</button>
+    <pre id="verifyResult">No result yet</pre>
+  </section>
+
+  <section>
+    <h2>Get Credential</h2>
+    <input type="text" id="docId" placeholder="document id" />
+    <button id="getBtn">Get</button>
+    <pre id="getResult">No result yet</pre>
+  </section>
+
+  <script type="module" src="/frontend/app.js"></script>
+</body>
+</html>

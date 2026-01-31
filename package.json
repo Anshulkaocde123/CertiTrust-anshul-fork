@@ -1,0 +1,16 @@
+{
+  "name": "dpi-03-certitrust",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch backend/server.js",
+    "start": "bun backend/server.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.9.0",
+    "ethers": "^6.8.0",
+    "jose": "^4.16.0"
+  }
+}
