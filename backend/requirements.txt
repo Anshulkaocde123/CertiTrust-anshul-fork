@@ -2,3 +2,6 @@ fastapi
 uvicorn
 httpx
 pytest
+opencv-python-headless
+pillow
+numpy
