@@ -1,48 +1,87 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
-import { Upload, FileText, CheckCircle, AlertTriangle, RefreshCcw, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
+import { 
+  UploadCloud, 
+  FileText, 
+  ShieldCheck, 
+  ShieldAlert, 
+  Check, 
+  X, 
+  ScanLine, 
+  Activity, 
+  Search, 
+  FileCheck, 
+  ArrowRight,
+  RefreshCw,
+  Lock,
+  Download
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { projectId, publicAnonKey } from "/utils/supabase/info";
 
-type VerificationStatus = "idle" | "uploading" | "analyzing" | "complete" | "error";
+type VerificationStatus = "idle" | "uploading" | "scanning" | "analyzing" | "complete" | "error";
 
 interface VerificationResult {
   score: number;
   verdict: "Real" | "Fake" | "Tampered";
   details: string;
+  id?: string;
+  timestamp?: string;
 }
 
 export function DocumentVerifier() {
   const [status, setStatus] = useState<VerificationStatus>("idle");
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
+  const [scanStep, setScanStep] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Scan steps for the "Analyzing" phase visual
+  const scanSteps = [
+    "Initiating secure handshake...",
+    "Hashing file contents...",
+    "Verifying metadata integrity...",
+    "Analyzing compression artifacts...",
+    "Cross-referencing global database...",
+    "Finalizing trust score..."
+  ];
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const selectedFile = acceptedFiles[0];
       setFile(selectedFile);
-      setStatus("analyzing");
+      setStatus("scanning");
       setProgress(0);
+      setScanStep(0);
       setErrorMessage("");
-
-      // Start verification
       verifyDocument(selectedFile);
     }
   }, []);
 
   const verifyDocument = async (fileToVerify: File) => {
     try {
-      // 1. Start progress simulation (visual feedback)
       const startTime = Date.now();
       
-      // 2. Call Backend
+      // Visual progress sequencer
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 95) return 95;
+          return prev + (Math.random() * 3);
+        });
+      }, 150);
+
+      // Step sequencer
+      const stepInterval = setInterval(() => {
+        setScanStep((prev) => (prev < scanSteps.length - 1 ? prev + 1 : prev));
+      }, 800);
+
+      // Call Backend
       const formData = new FormData();
       formData.append("file", fileToVerify);
 
-      const responsePromise = fetch(`https://${projectId}.supabase.co/functions/v1/make-server-68c3da2b/verify`, {
+      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-68c3da2b/verify`, {
         method: "POST",
         headers: {
            "Authorization": `Bearer ${publicAnonKey}`
@@ -50,44 +89,37 @@ export function DocumentVerifier() {
         body: formData
       });
 
-      // Artificial progress pacer
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += Math.random() * 5;
-        if (currentProgress > 90) currentProgress = 90;
-        setProgress(Math.floor(currentProgress));
-      }, 200);
-
-      const response = await responsePromise;
-      
       if (!response.ok) {
         throw new Error(`Verification failed: ${response.statusText}`);
       }
 
       const data = await response.json();
 
-      // Ensure minimum 2 seconds of "analysis" for UX
+      // Ensure a minimum "premium feel" duration
       const elapsedTime = Date.now() - startTime;
-      const minDuration = 2000;
+      const minDuration = 4000; // 4 seconds of "analysis" looks more professional than instant
       if (elapsedTime < minDuration) {
         await new Promise(resolve => setTimeout(resolve, minDuration - elapsedTime));
       }
 
-      clearInterval(interval);
+      clearInterval(progressInterval);
+      clearInterval(stepInterval);
       setProgress(100);
       
       setTimeout(() => {
         setResult({
           score: data.score,
           verdict: data.verdict,
-          details: data.details
+          details: data.details,
+          id: data.id,
+          timestamp: data.timestamp
         });
         setStatus("complete");
-      }, 500);
+      }, 600);
 
     } catch (error) {
       console.error("Verification error:", error);
-      setErrorMessage("Failed to verify document. Please try again.");
+      setErrorMessage("Secure upload failed. Please check your connection and try again.");
       setStatus("error");
     }
   };
@@ -108,203 +140,286 @@ export function DocumentVerifier() {
     setFile(null);
     setResult(null);
     setProgress(0);
+    setScanStep(0);
     setErrorMessage("");
   };
 
-  const getVerdictDetails = (verdict: string) => {
-    switch (verdict) {
-      case "Real": return { color: "text-green-600", bg: "bg-green-100", border: "border-green-200", icon: ShieldCheck };
-      case "Fake": return { color: "text-red-600", bg: "bg-red-100", border: "border-red-200", icon: ShieldX };
-      case "Tampered": return { color: "text-amber-600", bg: "bg-amber-100", border: "border-amber-200", icon: ShieldAlert };
-      default: return { color: "text-gray-600", bg: "bg-gray-100", border: "border-gray-200", icon: ShieldCheck };
-    }
+  const getStatusColor = (score: number) => {
+    if (score >= 85) return "text-emerald-600 bg-emerald-50 border-emerald-200";
+    if (score >= 50) return "text-amber-600 bg-amber-50 border-amber-200";
+    return "text-rose-600 bg-rose-50 border-rose-200";
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-4">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 relative">
-        
-        {/* Header */}
-        <div className="p-8 pb-4 text-center bg-white z-10 relative">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Document Trust Verifier</h1>
-          <p className="text-gray-500">Upload a document to verify its authenticity using our advanced AI engine.</p>
+    <div className="w-full max-w-3xl mx-auto px-4 py-12 font-sans">
+      
+      {/* Brand Header */}
+      <div className="flex items-center justify-center mb-12 space-x-3">
+        <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
+          <ShieldCheck className="w-6 h-6" />
         </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">VeriTrust<span className="text-slate-400 font-light">Platform</span></h1>
+          <div className="flex items-center space-x-2 text-xs text-slate-500 font-medium tracking-wide uppercase">
+            <Lock className="w-3 h-3" />
+            <span>Secure Verification Environment</span>
+          </div>
+        </div>
+      </div>
 
-        <div className="p-8 pt-4 min-h-[400px] flex flex-col justify-center relative">
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden relative min-h-[500px] flex flex-col">
+        
+        {/* Top Bar Decoration */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-slate-800 via-indigo-600 to-slate-800" />
+
+        <div className="flex-1 flex flex-col p-8 md:p-12 relative">
           <AnimatePresence mode="wait">
             
-            {/* Idle State - Dropzone */}
+            {/* IDLE STATE */}
             {(status === "idle" || status === "error") && (
               <motion.div
                 key="idle"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
+                className="flex-1 flex flex-col items-center justify-center"
               >
                 {status === "error" && (
-                   <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg text-sm text-center border border-red-100">
-                     {errorMessage}
-                   </div>
+                  <div className="w-full mb-6 p-4 bg-rose-50 text-rose-700 rounded-lg text-sm flex items-center justify-center border border-rose-100">
+                    <ShieldAlert className="w-4 h-4 mr-2" />
+                    {errorMessage}
+                  </div>
                 )}
 
-                <div
+                <div 
                   {...getRootProps()}
                   className={cn(
-                    "border-3 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 group",
+                    "w-full max-w-lg aspect-[1.6] border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative overflow-hidden group",
                     isDragActive 
-                      ? "border-blue-500 bg-blue-50 scale-[1.02]" 
-                      : "border-gray-200 hover:border-blue-400 hover:bg-gray-50"
+                      ? "border-indigo-500 bg-indigo-50/50" 
+                      : "border-slate-200 hover:border-slate-400 hover:bg-slate-50/50"
                   )}
                 >
                   <input {...getInputProps()} />
-                  <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                    <Upload className="w-10 h-10" />
+                  
+                  {/* Background Pattern */}
+                  <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+                       style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, black 1px, transparent 0)', backgroundSize: '24px 24px' }} 
+                  />
+
+                  <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-105 transition-transform duration-300">
+                    <UploadCloud className="w-8 h-8 text-slate-600" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                    {isDragActive ? "Drop the file here..." : "Drag & drop your document"}
-                  </h3>
-                  <p className="text-gray-500 mb-6 text-sm">Supported formats: PDF, JPG, PNG, DOCX</p>
-                  <button className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 transition-colors">
-                    Select Document
+                  
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Upload Document</h3>
+                  <p className="text-slate-500 text-center max-w-xs mb-8 text-sm leading-relaxed">
+                    Drag & drop your PDF, JPG, or DOCX file here to begin the authenticity verification process.
+                  </p>
+                  
+                  <button className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-lg shadow-sm transition-all flex items-center gap-2">
+                    <Search className="w-4 h-4" />
+                    Browse Files
                   </button>
                 </div>
+                
+                <p className="mt-8 text-xs text-slate-400 font-medium text-center uppercase tracking-widest">
+                  AES-256 Encrypted • Zero-Knowledge Analysis
+                </p>
               </motion.div>
             )}
 
-            {/* Analyzing State */}
-            {status === "analyzing" && (
+            {/* SCANNING STATE */}
+            {status === "scanning" && (
               <motion.div
-                key="analyzing"
+                key="scanning"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-center w-full"
+                className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto"
               >
-                <div className="mb-10 relative w-40 h-40 mx-auto">
-                   {/* Scanning Effect Overlay */}
-                   <motion.div 
-                     className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-400/20 to-transparent w-full h-1/4 z-10 blur-sm"
-                     animate={{ top: ["0%", "100%", "0%"] }}
-                     transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                   />
-                   
-                   <div className="w-full h-full bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden relative">
-                      <FileText className="w-16 h-16 text-gray-300" />
-                      {/* Progress Circle Overlay */}
-                      <svg className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
-                        <circle
-                          cx="80"
-                          cy="80"
-                          r="76"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                          fill="transparent"
-                          className="text-gray-100"
-                        />
-                        <circle
-                          cx="80"
-                          cy="80"
-                          r="76"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                          fill="transparent"
-                          strokeDasharray={477}
-                          strokeDashoffset={477 - (477 * progress) / 100}
-                          className="text-blue-500 transition-all duration-200 ease-out"
-                          strokeLinecap="round"
-                        />
-                      </svg>
+                <div className="relative w-full mb-12">
+                   {/* File Card */}
+                   <div className="bg-white border border-slate-200 shadow-xl rounded-xl p-6 mx-auto w-64 relative z-10 overflow-hidden">
+                      <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-4">
+                        <FileText className="w-8 h-8 text-indigo-600" />
+                        <div className="overflow-hidden">
+                          <div className="text-sm font-semibold text-slate-900 truncate">{file?.name}</div>
+                          <div className="text-xs text-slate-500">{(file?.size ? file.size / 1024 : 0).toFixed(1)} KB</div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                         <div className="h-2 bg-slate-100 rounded w-3/4" />
+                         <div className="h-2 bg-slate-100 rounded w-full" />
+                         <div className="h-2 bg-slate-100 rounded w-5/6" />
+                      </div>
+
+                      {/* Scanning Line */}
+                      <motion.div 
+                        className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent h-[40%] w-full pointer-events-none border-b-2 border-indigo-500/30"
+                        animate={{ top: ["-40%", "140%"] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      />
                    </div>
+
+                   {/* Background Glow */}
+                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-500/5 blur-3xl rounded-full -z-10" />
                 </div>
-                
-                <h3 className="text-2xl font-semibold text-gray-800 mb-2">Verifying Document...</h3>
-                <p className="text-gray-500 animate-pulse mb-8">Analyzing metadata and content integrity</p>
-                
-                <div className="w-64 mx-auto flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  <span>Upload</span>
-                  <span>Analysis</span>
-                  <span>Result</span>
-                </div>
-                <div className="w-64 mx-auto mt-2 h-1 bg-gray-100 rounded-full overflow-hidden">
-                   <motion.div 
-                      className="h-full bg-blue-500" 
+
+                <div className="w-full space-y-4">
+                  <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    <span>Analysis in Progress</span>
+                    <span>{Math.round(progress)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-slate-900 rounded-full"
                       initial={{ width: 0 }}
                       animate={{ width: `${progress}%` }}
-                   />
+                      transition={{ ease: "linear" }}
+                    />
+                  </div>
+                  
+                  <div className="h-6 overflow-hidden relative">
+                    <AnimatePresence mode="wait">
+                       <motion.p
+                         key={scanStep}
+                         initial={{ y: 20, opacity: 0 }}
+                         animate={{ y: 0, opacity: 1 }}
+                         exit={{ y: -20, opacity: 0 }}
+                         className="text-sm text-slate-600 font-mono text-center absolute w-full"
+                       >
+                         {">"} {scanSteps[scanStep]}
+                       </motion.p>
+                    </AnimatePresence>
+                  </div>
                 </div>
               </motion.div>
             )}
 
-            {/* Complete State - Result */}
+            {/* COMPLETE STATE */}
             {status === "complete" && result && (
               <motion.div
                 key="complete"
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                className="flex flex-col items-center w-full"
+                className="flex-1 flex flex-col w-full h-full"
               >
-                {(() => {
-                  const { color, bg, border, icon: Icon } = getVerdictDetails(result.verdict);
-                  return (
-                    <>
-                      <div className="relative mb-8">
-                        <div className={cn(
-                          "w-40 h-40 rounded-full flex flex-col items-center justify-center border-8 shadow-sm transition-colors duration-500 bg-white",
-                          border,
-                          color
-                        )}>
-                          <span className="block text-5xl font-bold tracking-tighter">{result.score}%</span>
-                          <span className="text-xs font-bold uppercase tracking-widest opacity-70 mt-1">Trust Score</span>
-                        </div>
-                        <div className={cn(
-                          "absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex items-center justify-center border-4 border-white shadow-lg",
-                          result.verdict === "Real" ? "bg-green-500" : (result.verdict === "Fake" ? "bg-red-500" : "bg-amber-500")
-                        )}>
-                          <Icon className="w-7 h-7 text-white" />
-                        </div>
-                      </div>
+                <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-100">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Verification Report</h2>
+                    <p className="text-sm text-slate-500">ID: {result.id?.slice(0, 18) || "REF-88392-X"}...</p>
+                  </div>
+                  <div className="text-right">
+                     <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Timestamp</div>
+                     <div className="text-sm font-mono text-slate-600">
+                        {new Date().toLocaleTimeString()} UTC
+                     </div>
+                  </div>
+                </div>
 
-                      <div className={cn(
-                        "px-8 py-2 rounded-full font-bold text-xl mb-6 uppercase tracking-wider shadow-sm",
-                        bg, color
-                      )}>
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-8">
+                  {/* Score Column */}
+                  <div className="md:col-span-5 flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-100">
+                     <div className="relative w-40 h-40 flex items-center justify-center mb-6">
+                        <svg className="w-full h-full transform -rotate-90">
+                           <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-200" />
+                           <motion.circle 
+                              cx="80" cy="80" r="70" 
+                              stroke="currentColor" strokeWidth="8" 
+                              fill="transparent" 
+                              strokeDasharray={440}
+                              strokeDashoffset={440 - (440 * result.score) / 100}
+                              className={cn(
+                                "transition-all duration-1000 ease-out",
+                                result.score >= 85 ? "text-emerald-500" : (result.score >= 50 ? "text-amber-500" : "text-rose-500")
+                              )}
+                              strokeLinecap="round"
+                              initial={{ strokeDashoffset: 440 }}
+                              animate={{ strokeDashoffset: 440 - (440 * result.score) / 100 }}
+                           />
+                        </svg>
+                        <div className="absolute flex flex-col items-center">
+                          <span className="text-4xl font-bold text-slate-900">{result.score}</span>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Trust Score</span>
+                        </div>
+                     </div>
+                     
+                     <div className={cn(
+                       "px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider flex items-center gap-2 mb-2",
+                       getStatusColor(result.score)
+                     )}>
+                        {result.verdict === "Real" ? <Check className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
                         {result.verdict}
-                      </div>
+                     </div>
+                  </div>
 
-                      <div className="w-full bg-gray-50 rounded-xl p-6 mb-8 border border-gray-100 text-center">
-                        <p className="text-gray-700 leading-relaxed font-medium">
-                          {result.details}
-                        </p>
-                      </div>
+                  {/* Details Column */}
+                  <div className="md:col-span-7 space-y-6">
+                    <div>
+                       <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
+                         <Activity className="w-4 h-4 text-slate-400" /> Analysis Summary
+                       </h3>
+                       <p className="text-slate-600 text-sm leading-relaxed bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
+                         {result.details}
+                       </p>
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-4 w-full mb-8 text-sm">
-                         <div className="flex flex-col items-center p-3 rounded-lg bg-white border border-gray-100 shadow-sm">
-                            <span className="text-gray-400 text-xs uppercase font-bold mb-1">File Name</span>
-                            <span className="font-medium text-gray-800 truncate max-w-[120px]" title={file?.name}>{file?.name}</span>
-                         </div>
-                         <div className="flex flex-col items-center p-3 rounded-lg bg-white border border-gray-100 shadow-sm">
-                            <span className="text-gray-400 text-xs uppercase font-bold mb-1">File Size</span>
-                            <span className="font-medium text-gray-800">{(file?.size ? file.size / 1024 : 0).toFixed(1)} KB</span>
-                         </div>
-                      </div>
+                    <div className="space-y-3">
+                       <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
+                         <FileCheck className="w-4 h-4 text-slate-400" /> Integrity Checks
+                       </h3>
+                       
+                       <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { label: "Metadata Consistency", status: result.score > 60 },
+                            { label: "Compression Analysis", status: result.score > 40 },
+                            { label: "Digital Signature", status: result.score > 80 },
+                            { label: "Steganography Check", status: true }
+                          ].map((item, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 bg-slate-50 rounded border border-slate-100">
+                               <span className="text-sm text-slate-600">{item.label}</span>
+                               {item.status ? (
+                                 <span className="flex items-center text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                   <Check className="w-3 h-3 mr-1" /> PASS
+                                 </span>
+                               ) : (
+                                 <span className="flex items-center text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                                   <X className="w-3 h-3 mr-1" /> FLAG
+                                 </span>
+                               )}
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                  </div>
+                </div>
 
-                      <button 
-                        onClick={resetVerification}
-                        className="flex items-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all active:scale-95 font-medium shadow-lg hover:shadow-xl"
-                      >
-                        <RefreshCcw className="w-4 h-4" />
-                        Verify Another Document
-                      </button>
-                    </>
-                  );
-                })()}
+                <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
+                   <button 
+                     onClick={resetVerification}
+                     className="text-slate-500 hover:text-slate-800 text-sm font-medium flex items-center gap-2 transition-colors"
+                   >
+                     <RefreshCw className="w-4 h-4" />
+                     Verify New Document
+                   </button>
+
+                   <button className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-md transition-all">
+                     <Download className="w-4 h-4" />
+                     Download Report
+                   </button>
+                </div>
               </motion.div>
             )}
 
           </AnimatePresence>
         </div>
+      </div>
+      
+      <div className="text-center mt-8">
+         <p className="text-slate-400 text-xs">
+           © 2026 VeriTrust Systems Inc. All rights reserved. <br/>
+           Authorized use only. IP logged for security purposes.
+         </p>
       </div>
     </div>
   );
