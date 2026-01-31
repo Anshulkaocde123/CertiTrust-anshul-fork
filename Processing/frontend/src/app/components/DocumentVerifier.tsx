@@ -19,10 +19,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import mammoth from 'mammoth';
+import { generateId } from '../../lib/generateId';
+import { computeSHA256Hex } from '../../lib/computeHash';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-}
+} 
 
 type VerificationState = 'idle' | 'processing' | 'completed' | 'error';
 
@@ -32,6 +34,7 @@ export function DocumentVerifier() {
   const [processedPdfUrl, setProcessedPdfUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [shortId, setShortId] = useState<string | null>(null);
 
   // Helper: Text Wrapping for PDF generation from text
   const wrapText = (text: string, maxWidth: number, font: any, fontSize: number) => {
@@ -126,12 +129,16 @@ export function DocumentVerifier() {
 
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
       
-      // Generate Secure Token
-      const signatureId = Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join('').toUpperCase();
+      // Deterministic SHA-256 hash of the file as the document ID (lowercase hex)
+      const fileHash = await computeSHA256Hex(fileBuffer);
+      const signatureId = fileHash; // canonical identifier for the file (lowercase)
+      // Keep a short human-friendly preview for the UI (20 chars)
+      setShortId(signatureId.slice(0, 20));
       const timestamp = new Date().toISOString();
       const verificationData = JSON.stringify({
         iss: "CertifyPro Secure System",
         id: signatureId,
+        fileHash,
         ts: timestamp,
         file: uploadedFile.name,
       });
@@ -187,7 +194,8 @@ export function DocumentVerifier() {
       });
       
       textY -= 12;
-      firstPage.drawText(`ID: ${signatureId.match(/.{1,4}/g)?.join('-')}`, {
+      // Show first 20 chars grouped in 4s for readability
+      firstPage.drawText(`ID: ${signatureId.slice(0,20).match(/.{1,4}/g)?.join('-')}`, {
         x: textX,
         y: textY,
         size: fontSizeDetails,
@@ -439,7 +447,7 @@ export function DocumentVerifier() {
                       
                       <h3 className="text-2xl font-bold text-slate-900 mb-2">Successfully Verified</h3>
                       <p className="text-slate-500 text-sm max-w-xs mb-8">
-                        Your document has been secured with ID <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-xs">#{Math.random().toString(36).substring(2,8).toUpperCase()}</span>
+                        Your document has been secured with ID <span className="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-xs">{shortId || '—'}</span> 
                       </p>
 
                       <div className="w-full space-y-3">
