@@ -58,6 +58,13 @@ Bun.serve({
       const { verifyHash } = await import('./routes/verifyHash.js');
       return attachCors(await verifyHash(req));
     }
+
+    // Register a document hash and optional attestation (POST JSON: { fileHash, owner, fileName, metadata, attest })
+    if (req.method === 'POST' && pathname === '/api/registerHash') {
+      const { registerHash } = await import('./routes/registerHash.js');
+      return attachCors(await registerHash(req));
+    }
+
     if (req.method === 'GET' && pathname === '/api/getCredential') return attachCors(await getCredential(req));
 
     return jsonResponse({ ok: true, message: 'DPI-03 backend running' });

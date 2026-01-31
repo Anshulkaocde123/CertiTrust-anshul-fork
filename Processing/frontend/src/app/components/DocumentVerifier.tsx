@@ -35,6 +35,7 @@ export function DocumentVerifier() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [shortId, setShortId] = useState<string | null>(null);
+  const [fileHash, setFileHash] = useState<string | null>(null);
 
   // Helper: Text Wrapping for PDF generation from text
   const wrapText = (text: string, maxWidth: number, font: any, fontSize: number) => {
@@ -134,6 +135,8 @@ export function DocumentVerifier() {
       const signatureId = fileHash; // canonical identifier for the file (lowercase)
       // Keep a short human-friendly preview for the UI (20 chars)
       setShortId(signatureId.slice(0, 20));
+      // Keep the full file hash in state for registration/verification
+      setFileHash(fileHash);
       const timestamp = new Date().toISOString();
       const verificationUrl = (() => {
         try {
@@ -225,7 +228,11 @@ export function DocumentVerifier() {
       });
       
       const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      // Ensure we pass a plain ArrayBuffer to Blob to avoid SharedArrayBuffer typing issues
+      // Create a plain ArrayBuffer copy to avoid SharedArrayBuffer typing issues
+      const ab = new ArrayBuffer(pdfBytes.byteLength);
+      new Uint8Array(ab).set(pdfBytes.subarray(0, pdfBytes.byteLength));
+      const blob = new Blob([ab], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       
       setProcessedPdfUrl(url);
@@ -464,6 +471,32 @@ export function DocumentVerifier() {
                             Download Signed Document
                           </a>
                         )}
+
+                        {/* Register certificate with Supabase (and optionally attest on-chain) */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              setState('processing');
+                              const res = await fetch('/api/registerHash', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileHash: fileHash || shortId || null, fileName: file?.name, owner: 'did:example:institution', attest: false })
+                              });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Registration failed');
+                              alert('Registered successfully');
+                              setState('completed');
+                            } catch (err) {
+                              console.error(err);
+                              alert('Registration failed: ' + (err instanceof Error ? err.message : String(err)));
+                              setState('completed');
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                          Register Certificate (Database)
+                        </button>
+
                         <button 
                           onClick={reset}
                           className="w-full px-4 py-3 bg-white border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors"
